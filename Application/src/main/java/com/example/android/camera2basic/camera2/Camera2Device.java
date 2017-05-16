@@ -57,6 +57,9 @@ public class Camera2Device implements AutoCloseable
     @Nullable
     private ImageReader imageReader;
 
+    @Nullable
+    private SurfaceTexture surfaceTexture;
+
     private final Semaphore cameraOpenCloseLock = new Semaphore(1);
 
     @Nullable
@@ -176,7 +179,6 @@ public class Camera2Device implements AutoCloseable
         {
             process(result);
         }
-
     };
 
     // ------------------------- Lifecycle -------------------------
@@ -227,6 +229,7 @@ public class Camera2Device implements AutoCloseable
             protected void onEnter(@NonNull StateMachine parent)
             {
                 startBackgroundThread();
+                createSurface();
                 openCamera();
             }
         });
@@ -245,6 +248,7 @@ public class Camera2Device implements AutoCloseable
             {
                 closeCamera();
                 stopBackgroundThread();
+                removeSurface();
             }
         });
         controller.switchState(States.STARTUP);
@@ -280,6 +284,19 @@ public class Camera2Device implements AutoCloseable
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void createSurface()
+    {
+        if (surfaceTexture != null) throw new RuntimeException("Assertation failed: surfaceTexture != null");
+        surfaceTexture = new SurfaceTexture(10);
+    }
+
+    private void removeSurface()
+    {
+        if (surfaceTexture == null) throw new RuntimeException("Assertation failed: surfaceTexture == null");
+        surfaceTexture.release();
+        surfaceTexture = null;
     }
 
     private void openCamera()
@@ -325,15 +342,23 @@ public class Camera2Device implements AutoCloseable
     private void createCameraPreviewSession() {
         if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
         if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
+        if (surfaceTexture == null) throw new RuntimeException("Assertation failed: surfaceTexture == null");
         if (previewRequestBuilder != null) throw new RuntimeException("Assertation failed: previewRequestBuilder != null");
         if (previewRequest != null) throw new RuntimeException("Assertation failed: previewRequest != null");
         try {
+            // We configure the size of default buffer to be the size of camera preview we want.
+            //surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+
+            // This is the output Surface we need to start preview.
+            Surface surface = new Surface(surfaceTexture);
+
             // We set up a CaptureRequest.Builder with the output Surface.
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            previewRequestBuilder.addTarget(surface);
 
             // Here, we create a CameraCaptureSession for camera preview.
-            cameraDevice.createCaptureSession(Collections.singletonList(imageReader.getSurface()),
-                    new CameraCaptureSession.StateCallback()
+            cameraDevice.createCaptureSession(Arrays.asList(surface,
+                    imageReader.getSurface()), new CameraCaptureSession.StateCallback()
                     {
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession)
@@ -347,7 +372,9 @@ public class Camera2Device implements AutoCloseable
                             captureSession = cameraCaptureSession;
                             try {
                                 // Auto focus should be continuous for camera preview.
-                                previewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                                previewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+
 
                                 // Finally, we start displaying the camera preview.
                                 previewRequest = previewRequestBuilder.build();
