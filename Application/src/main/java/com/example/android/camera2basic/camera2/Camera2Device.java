@@ -20,6 +20,7 @@ import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
 
@@ -41,7 +42,12 @@ public class Camera2Device implements AutoCloseable
 
     private final StateMachine controller = new StateMachine();
 
-    private enum States { SELECT_CAMERA, STARTUP, READY, SHUTDOWN }
+    private enum States
+    {
+        SELECT_CAMERA, STARTUP, READY,
+        WAITING_LOCK, WAITING_PRECAPTURE, WAITING_NON_PRECAPTURE, PICTURE_TAKEN,
+        SHUTDOWN
+    }
 
     private final Context context;
 
@@ -73,6 +79,8 @@ public class Camera2Device implements AutoCloseable
 
     @Nullable
     private CaptureRequest previewRequest;
+
+    private static final Size PREVIEW_SIZE = new Size(200, 200);
 
     // ------------------------- Internal state -------------------------
 
@@ -117,59 +125,12 @@ public class Camera2Device implements AutoCloseable
 
     private final CameraCaptureSession.CaptureCallback mCaptureCallback = new CameraCaptureSession.CaptureCallback()
     {
-        private void process(CaptureResult result)
-        {
-            /*switch (mState) {
-                case STATE_PREVIEW: {
-                    // We have nothing to do when the camera preview is working normally.
-                    break;
-                }
-                case STATE_WAITING_LOCK: {
-                    Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
-                    if (afState == null) {
-                        captureStillPicture();
-                    } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
-                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
-                        // CONTROL_AE_STATE can be null on some devices
-                        Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
-                        if (aeState == null ||
-                                aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
-                            mState = STATE_PICTURE_TAKEN;
-                            captureStillPicture();
-                        } else {
-                            runPrecaptureSequence();
-                        }
-                    }
-                    break;
-                }
-                case STATE_WAITING_PRECAPTURE: {
-                    // CONTROL_AE_STATE can be null on some devices
-                    Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
-                    if (aeState == null ||
-                            aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE ||
-                            aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED) {
-                        mState = STATE_WAITING_NON_PRECAPTURE;
-                    }
-                    break;
-                }
-                case STATE_WAITING_NON_PRECAPTURE: {
-                    // CONTROL_AE_STATE can be null on some devices
-                    Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
-                    if (aeState == null || aeState != CaptureResult.CONTROL_AE_STATE_PRECAPTURE) {
-                        mState = STATE_PICTURE_TAKEN;
-                        captureStillPicture();
-                    }
-                    break;
-                }
-            }*/
-        }
-
         @Override
         public void onCaptureProgressed(@NonNull CameraCaptureSession session,
                                         @NonNull CaptureRequest request,
                                         @NonNull CaptureResult partialResult)
         {
-            process(partialResult);
+            controller.sendEvent(partialResult);
         }
 
         @Override
@@ -177,7 +138,7 @@ public class Camera2Device implements AutoCloseable
                                        @NonNull CaptureRequest request,
                                        @NonNull TotalCaptureResult result)
         {
-            process(result);
+            controller.sendEvent(result);
         }
     };
 
@@ -191,35 +152,8 @@ public class Camera2Device implements AutoCloseable
             @Override
             protected void onEnter(@NonNull StateMachine parent)
             {
-                if (imageReader != null) throw new RuntimeException("Assertation failed: imageReader != null");
-                CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
-                try {
-                    String[] cameraIdList = manager.getCameraIdList();
-                    for (String cameraId : cameraIdList) {
-                        if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
-                        CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-                        Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                        if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                            continue;
-                        }
-                        StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                        if (map == null) {
-                            continue;
-                        }
-                        // For still image captures, we use the largest available size.
-                        Size largest = Collections.max(
-                                Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
-                                new Camera2Device.CompareSizesByArea()
-                        );
-                        imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
-                        imageReader.setOnImageAvailableListener(onImageAvailableListener, backgroundHandler);
-                        Camera2Device.this.cameraId = cameraId;
-                        break;
-                    }
-                } catch (CameraAccessException e) {
-                    throw new RuntimeException(e);
-                }
-                if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
+                Log.i(TAG, "onEnter: SELECT_CAMERA");
+                selectCamera();
                 controller.switchState(States.STARTUP);
             }
         });
@@ -228,6 +162,7 @@ public class Camera2Device implements AutoCloseable
             @Override
             protected void onEnter(@NonNull StateMachine parent)
             {
+                Log.i(TAG, "onEnter: STARTUP");
                 startBackgroundThread();
                 createSurface();
                 openCamera();
@@ -238,7 +173,95 @@ public class Camera2Device implements AutoCloseable
             @Override
             protected void onEnter(@NonNull StateMachine parent)
             {
-                super.onEnter(parent);
+                Log.i(TAG, "onEnter: READY");
+            }
+        });
+        controller.addState(States.WAITING_LOCK, new StateMachine.State()
+        {
+            @Override
+            protected void onEnter(@NonNull StateMachine parent)
+            {
+                Log.i(TAG, "onEnter: WAITING_LOCK");
+            }
+
+            @Override
+            protected void onEvent(@NonNull StateMachine parent, @NonNull Object event)
+            {
+                if (event instanceof CaptureResult) {
+                    CaptureResult casted = (CaptureResult) event;
+                    Integer afState = casted.get(CaptureResult.CONTROL_AF_STATE);
+                    if (afState == null) {
+                        captureStillPicture();
+                    } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
+                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
+                        // CONTROL_AE_STATE can be null on some devices
+                        Integer aeState = casted.get(CaptureResult.CONTROL_AE_STATE);
+                        if (
+                            aeState == null ||
+                            aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
+                        ) {
+                            captureStillPicture();
+                            controller.switchState(States.PICTURE_TAKEN);
+                        } else {
+                            runPrecaptureSequence();
+                        }
+                    }
+                }
+            }
+        });
+        controller.addState(States.WAITING_PRECAPTURE, new StateMachine.State()
+        {
+            @Override
+            protected void onEnter(@NonNull StateMachine parent)
+            {
+                Log.i(TAG, "onEnter: WAITING_PRECAPTURE");
+            }
+
+            @Override
+            protected void onEvent(@NonNull StateMachine parent, @NonNull Object event)
+            {
+                if (event instanceof CaptureResult) {
+                    CaptureResult casted = (CaptureResult) event;
+                    // CONTROL_AE_STATE can be null on some devices
+                    Integer aeState = casted.get(CaptureResult.CONTROL_AE_STATE);
+                    if (
+                        aeState == null ||
+                        aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE ||
+                        aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED
+                    ) {
+                        controller.switchState(States.WAITING_NON_PRECAPTURE);
+                    }
+                }
+            }
+        });
+        controller.addState(States.WAITING_NON_PRECAPTURE, new StateMachine.State()
+        {
+            @Override
+            protected void onEnter(@NonNull StateMachine parent)
+            {
+                Log.i(TAG, "onEnter: WAITING_NON_PRECAPTURE");
+            }
+
+            @Override
+            protected void onEvent(@NonNull StateMachine parent, @NonNull Object event)
+            {
+                if (event instanceof CaptureResult) {
+                    CaptureResult casted = (CaptureResult) event;
+                    // CONTROL_AE_STATE can be null on some devices
+                    Integer aeState = casted.get(CaptureResult.CONTROL_AE_STATE);
+                    if (aeState == null || aeState != CaptureResult.CONTROL_AE_STATE_PRECAPTURE) {
+                        captureStillPicture();
+                        controller.switchState(States.PICTURE_TAKEN);
+                    }
+                }
+            }
+        });
+        controller.addState(States.PICTURE_TAKEN, new StateMachine.State()
+        {
+            @Override
+            protected void onEnter(@NonNull StateMachine parent)
+            {
+                Log.i(TAG, "onEnter: PICTURE_TAKEN");
             }
         });
         controller.addState(States.SHUTDOWN, new StateMachine.State()
@@ -246,6 +269,7 @@ public class Camera2Device implements AutoCloseable
             @Override
             protected void onEnter(@NonNull StateMachine parent)
             {
+                Log.i(TAG, "onEnter: SHUTDOWN");
                 closeCamera();
                 stopBackgroundThread();
                 removeSurface();
@@ -299,6 +323,39 @@ public class Camera2Device implements AutoCloseable
         surfaceTexture = null;
     }
 
+    private void selectCamera()
+    {
+        if (imageReader != null) throw new RuntimeException("Assertation failed: imageReader != null");
+        CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        try {
+            String[] cameraIdList = manager.getCameraIdList();
+            for (String cameraId : cameraIdList) {
+                if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
+                CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
+                    continue;
+                }
+                StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                if (map == null) {
+                    continue;
+                }
+                // For still image captures, we use the largest available size.
+                Size largest = Collections.max(
+                        Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
+                        new Camera2Device.CompareSizesByArea()
+                );
+                imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
+                imageReader.setOnImageAvailableListener(onImageAvailableListener, backgroundHandler);
+                Camera2Device.this.cameraId = cameraId;
+                break;
+            }
+        } catch (CameraAccessException e) {
+            throw new RuntimeException(e);
+        }
+        if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
+    }
+
     private void openCamera()
     {
         if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
@@ -339,7 +396,8 @@ public class Camera2Device implements AutoCloseable
         }
     }
 
-    private void createCameraPreviewSession() {
+    private void createCameraPreviewSession()
+    {
         if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
         if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
         if (surfaceTexture == null) throw new RuntimeException("Assertation failed: surfaceTexture == null");
@@ -347,7 +405,7 @@ public class Camera2Device implements AutoCloseable
         if (previewRequest != null) throw new RuntimeException("Assertation failed: previewRequest != null");
         try {
             // We configure the size of default buffer to be the size of camera preview we want.
-            //surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            surfaceTexture.setDefaultBufferSize(PREVIEW_SIZE.getWidth(), PREVIEW_SIZE.getHeight());
 
             // This is the output Surface we need to start preview.
             Surface surface = new Surface(surfaceTexture);
@@ -357,15 +415,16 @@ public class Camera2Device implements AutoCloseable
             previewRequestBuilder.addTarget(surface);
 
             // Here, we create a CameraCaptureSession for camera preview.
-            cameraDevice.createCaptureSession(Arrays.asList(surface,
-                    imageReader.getSurface()), new CameraCaptureSession.StateCallback()
+            cameraDevice.createCaptureSession(
+                    Arrays.asList(surface, imageReader.getSurface()),
+                    new CameraCaptureSession.StateCallback()
                     {
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession)
                         {
                             // The camera is already closed
                             if (cameraDevice == null) {
-                                return; // todo ??
+                                return;
                             }
 
                             // When the session is ready, we start displaying the preview.
