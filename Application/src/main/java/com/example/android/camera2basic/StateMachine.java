@@ -33,14 +33,14 @@ public class StateMachine
     private int currentIndex = -1;
     private final State states[] = new State[MAX_STATES];
 
-    public void addState(Enum index, @NonNull State state)
+    public void addState(@NonNull Enum index, @NonNull State state)
     {
         if (index.ordinal() < 0 || index.ordinal() >= MAX_STATES) throw new RuntimeException("Wrong index: index");
         if (states[index.ordinal()] != null) throw new RuntimeException("Assertation failed: states[index] != null");
         states[index.ordinal()] = state;
     }
 
-    public void switchState(Enum index)
+    public void switchState(@NonNull Enum index)
     {
         if (index.ordinal() < 0 || index.ordinal() >= MAX_STATES) throw new RuntimeException("Wrong index: index");
         if (states[index.ordinal()] == null) throw new RuntimeException("Assertation failed: states[index] == null");
@@ -62,5 +62,15 @@ public class StateMachine
     {
         if (currentState == null) throw new RuntimeException("Assertation failed: currentState == null");
         return currentIndex;
+    }
+
+    public boolean isInState(@NonNull Enum index)
+    {
+        return getCurrentStateId() == index.ordinal();
+    }
+
+    public boolean isNotInState(@NonNull Enum index)
+    {
+        return getCurrentStateId() != index.ordinal();
     }
 }
