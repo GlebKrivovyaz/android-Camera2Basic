@@ -13,6 +13,7 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.Image;
 import android.media.ImageReader;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -35,6 +36,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 // todo: setRepeatingBurst
 
@@ -66,6 +68,7 @@ public class Camera2Device implements AutoCloseable
     public interface Listener
     {
         void onReady();
+        void onImageAvailable(@NonNull Image image);
     }
 
     private final StateMachine controller = new StateMachine();
@@ -130,7 +133,7 @@ public class Camera2Device implements AutoCloseable
         startBackgroundThread();
     }
 
-    public void prepare(@Nullable final Listener listener)
+    public void prepare(@NonNull final Listener listener)
     {
         Log.d(TAG, "prepare() called with: listener = [" + listener + "]");
         controller.addState(States.PREPARE, new StateMachine.State()
@@ -139,7 +142,7 @@ public class Camera2Device implements AutoCloseable
             protected void onEnter(@NonNull StateMachine parent)
             {
                 Log.i(TAG, "onEnter: PREPARE");
-                selectCamera();
+                selectCamera(listener);
                 openCamera();
             }
         });
@@ -149,9 +152,7 @@ public class Camera2Device implements AutoCloseable
             protected void onEnter(@NonNull StateMachine parent)
             {
                 Log.i(TAG, "onEnter: READY");
-                if (listener != null) {
-                    listener.onReady();
-                }
+                listener.onReady();
             }
         });
         controller.addState(States.TAKING_PICTURE, new StateMachine.State()
@@ -208,24 +209,12 @@ public class Camera2Device implements AutoCloseable
         }
     }
 
-    private long prevPic = System.currentTimeMillis();
-
-    private final ImageReader.OnImageAvailableListener imageAvailableListener = new ImageReader.OnImageAvailableListener()
-    {
-        @Override
-        public void onImageAvailable(ImageReader reader)
-        {
-            Log.i(TAG, "onImageAvailable: took: " + (System.currentTimeMillis() - prevPic) / 1000.0f);
-            prevPic = System.currentTimeMillis();
-        }
-    };
-
-    private void selectCamera()
+    private void selectCamera(@NonNull final Listener listener)
     {
         Log.d(TAG, "selectCamera() called");
         CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         try {
-            String[] cameraIdList = manager.getCameraIdList();
+            final String[] cameraIdList = manager.getCameraIdList();
             for (String cameraId : cameraIdList) {
                 if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
                 CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
@@ -244,10 +233,19 @@ public class Camera2Device implements AutoCloseable
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new Camera2Device.CompareSizesByArea()
                 );
-
                 imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, BRACKETS);
-                imageReader.setOnImageAvailableListener(imageAvailableListener, backgroundHandler);
-
+                if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
+                imageReader.setOnImageAvailableListener(
+                        new ImageReader.OnImageAvailableListener()
+                        {
+                            @Override
+                            public void onImageAvailable(ImageReader reader)
+                            {
+                                listener.onImageAvailable(reader.acquireLatestImage());
+                            }
+                        },
+                        backgroundHandler
+                );
                 Camera2Device.this.cameraId = cameraId;
                 break;
             }
@@ -364,25 +362,19 @@ public class Camera2Device implements AutoCloseable
         if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
         WindowManager windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         final int rotation = windowManager.getDefaultDisplay().getRotation();
-
         CaptureRequest.Builder captureBuilder;
         try {
             captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_MANUAL);
         } catch (CameraAccessException e) {
             throw new RuntimeException(e);
         }
-
         captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
         captureBuilder.addTarget(imageReader.getSurface());
-
         for (int bracket = 0; bracket < BRACKETS; bracket++) {
 
-
-            // todo: exposition
+            // todo: exposition and other changes
 
             captureRequests.add(captureBuilder.build());
-
-
         }
     }
 
@@ -390,6 +382,7 @@ public class Camera2Device implements AutoCloseable
     {
         Log.d(TAG, "performBracketing() called");
         if (!controller.isInState(States.READY)) throw new RuntimeException("Assertation failed: !controller.isInState(States.READY)");
+        if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
         controller.switchState(States.TAKING_PICTURE);
     }
 
@@ -399,8 +392,7 @@ public class Camera2Device implements AutoCloseable
         if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
         if (imageReader == null) throw new RuntimeException("Assertation failed: imageReaders == null");
         if (captureSession == null) throw new RuntimeException("Assertation failed: captureSession == null");
-
-
+        final AtomicInteger frame = new AtomicInteger(0);
         try {
             captureSession.captureBurst(
                     captureRequests,
@@ -409,7 +401,9 @@ public class Camera2Device implements AutoCloseable
                         @Override
                         public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result)
                         {
-                            controller.switchState(States.READY);
+                            if (frame.incrementAndGet() == BRACKETS) {
+                                //controller.switchState(States.READY);
+                            }
                         }
                     },
                     backgroundHandler
