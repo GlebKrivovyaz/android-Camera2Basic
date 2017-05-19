@@ -104,30 +104,9 @@ public class Camera2Device implements AutoCloseable
 
     private int sensorOrientation;
 
-    // ------------------------- Lifecycle -------------------------
+    // ------------------------- +Controller -------------------------
 
     private static final int REQUEST_CAMERA_PERMISSION = 123;
-
-    public static void requestCameraPermissions(@NonNull Activity activity)
-    {
-        Log.d(TAG, "requestCameraPermissions() called with: activity = [" + activity + "]");
-        ActivityCompat.requestPermissions(activity, new String[]{ Manifest.permission.CAMERA }, REQUEST_CAMERA_PERMISSION);
-    }
-
-    public static boolean onPermissionsResult(int requestCode, String[] permissions, int[] grantResults) throws CameraException
-    {
-        Log.d(TAG, "onPermissionsResult() called with: requestCode = [" + requestCode + "], permissions = [" + Arrays.toString(permissions) + "], grantResults = [" + Arrays.toString(grantResults) + "]");
-        if (requestCode == REQUEST_CAMERA_PERMISSION) {
-            for (int result : grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    throw new CameraException("Permission not granted!");
-                }
-            }
-            return true;
-        } else {
-            return false;
-        }
-    }
 
     public Camera2Device(@NonNull final Context context)
     {
@@ -209,7 +188,28 @@ public class Camera2Device implements AutoCloseable
         controller.switchState(States.SHUTDOWN);
     }
 
-    // ------------------------- Interface -------------------------
+    // ------------------------- +Interface -------------------------
+
+    public static void requestCameraPermissions(@NonNull Activity activity)
+    {
+        Log.d(TAG, "requestCameraPermissions() called with: activity = [" + activity + "]");
+        ActivityCompat.requestPermissions(activity, new String[]{ Manifest.permission.CAMERA }, REQUEST_CAMERA_PERMISSION);
+    }
+
+    public static boolean onPermissionsResult(int requestCode, String[] permissions, int[] grantResults) throws CameraException
+    {
+        Log.d(TAG, "onPermissionsResult() called with: requestCode = [" + requestCode + "], permissions = [" + Arrays.toString(permissions) + "], grantResults = [" + Arrays.toString(grantResults) + "]");
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    throw new CameraException("Permission not granted!");
+                }
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     public void findExposureLock()
     {
@@ -226,7 +226,7 @@ public class Camera2Device implements AutoCloseable
         controller.switchState(States.TAKING_PICTURE);
     }
 
-    // ------------------------- Business -------------------------
+    // ------------------------- +Business -------------------------
 
     private void startBackgroundThread()
     {
@@ -414,7 +414,7 @@ public class Camera2Device implements AutoCloseable
                                        @NonNull CaptureRequest request,
                                        @NonNull TotalCaptureResult result)
         {
-            controller.sendEvent(request);
+            controller.sendEvent(result);
         }
 
         @Override
@@ -424,21 +424,7 @@ public class Camera2Device implements AutoCloseable
         }
     };
 
-    private void runAePrecaptureSequence()
-    {
-        Log.d(TAG, "runAePrecaptureSequence() called");
-        if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
-        if (captureSession == null) throw new RuntimeException("Assertation failed: captureSession == null");
-        try {
-            CaptureRequest.Builder captureRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-            captureRequest.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-            captureSession.capture(captureRequest.build(), aePrecaptureCallback, backgroundHandler);
-        } catch (CameraAccessException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void updateCaptureRequestsAccordingToAe()
+    private CaptureRequest.Builder createCaptureRequestBuilder()
     {
         if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
         if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
@@ -452,23 +438,42 @@ public class Camera2Device implements AutoCloseable
         }
         captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
         captureBuilder.addTarget(imageReader.getSurface());
-        for (int bracket = 1; bracket < BRACKETS + 1; bracket++) {
+        return captureBuilder;
+    }
+
+    private void runAePrecaptureSequence()
+    {
+        Log.d(TAG, "runAePrecaptureSequence() called");
+        if (captureSession == null) throw new RuntimeException("Assertation failed: captureSession == null");
+        CaptureRequest.Builder captureRequestBuilder = createCaptureRequestBuilder();
+        try {
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+            captureSession.capture(captureRequestBuilder.build(), aePrecaptureCallback, backgroundHandler);
+        } catch (CameraAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void updateCaptureRequestsAccordingToAe()
+    {
+        captureRequests.clear();
+        CaptureRequest.Builder captureRequestBuilder = createCaptureRequestBuilder();
+        for (int bracket = 0; bracket < BRACKETS; bracket++) {
             //captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 685000000L * bracket);
             //captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
             //captureBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
-            captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, bracket);
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, bracket);
             //CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION
             // todo: exposition and other changes
-            captureRequests.add(captureBuilder.build());
+            captureRequests.add(captureRequestBuilder.build());
         }
     }
 
     private void captureBurst()
     {
         Log.d(TAG, "captureBurst() called");
-        if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
-        if (imageReader == null) throw new RuntimeException("Assertation failed: imageReaders == null");
         if (captureSession == null) throw new RuntimeException("Assertation failed: captureSession == null");
+        if (!captureRequests.isEmpty()) throw new RuntimeException("Assertation failed: !captureRequests.isEmpty()");
         final AtomicInteger frame = new AtomicInteger(0);
         try {
             captureSession.captureBurst(
@@ -499,7 +504,7 @@ public class Camera2Device implements AutoCloseable
         return (ORIENTATIONS.get(rotation) + sensorOrientation + 270) % 360;
     }
 
-    // ------------------------- Auxiliary -------------------------
+    // ------------------------- +Auxiliary -------------------------
 
     private static class CompareSizesByArea implements Comparator<Size>
     {

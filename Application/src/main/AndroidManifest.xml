@@ -30,7 +30,7 @@
         android:icon="@drawable/ic_launcher"
         android:theme="@style/MaterialTheme">
 
-        <activity android:name=".camera2.PermissionsRequestActivity"
+        <activity android:name=".PermissionsRequestActivity"
                   android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -38,7 +38,7 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".camera2.Camera2Activity"
+        <activity android:name=".Camera2Activity"
                   android:label="@string/app_name">
         </activity>
 
