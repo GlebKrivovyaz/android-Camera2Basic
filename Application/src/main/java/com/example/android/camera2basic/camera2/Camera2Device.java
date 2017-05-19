@@ -418,7 +418,9 @@ public class Camera2Device implements AutoCloseable
         }
 
         @Override
-        public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull CaptureFailure failure)
+        public void onCaptureFailed(@NonNull CameraCaptureSession session,
+                                    @NonNull CaptureRequest request,
+                                    @NonNull CaptureFailure failure)
         {
             throw new RuntimeException("runAePrecaptureSequence failed!");
         }
