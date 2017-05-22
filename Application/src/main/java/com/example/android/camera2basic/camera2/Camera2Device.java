@@ -10,9 +10,7 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
@@ -29,6 +27,7 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import com.example.android.camera2basic.Asserts;
 import com.example.android.camera2basic.StateMachine;
 
 import java.util.ArrayList;
@@ -189,8 +188,8 @@ public class Camera2Device implements AutoCloseable
     public void performBracketing()
     {
         Log.d(TAG, "performBracketing() called");
-        if (!controller.isInState(States.READY)) throw new RuntimeException("Assertation failed: !controller.isInState(States.READY)");
-        if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
+        Asserts.assertTrue(controller.isInState(States.READY), "controller.isInState(States.READY)");
+        Asserts.assertNotNull(imageReader, "imageReader != null");
         controller.switchState(States.TAKING_PICTURE);
     }
 
@@ -199,8 +198,8 @@ public class Camera2Device implements AutoCloseable
     private void startBackgroundThread()
     {
         Log.d(TAG, "startBackgroundThread() called");
-        if (backgroundThread != null) throw new RuntimeException("Assertation failed: backgroundThread != null");
-        if (backgroundHandler != null) throw new RuntimeException("Assertation failed: backgroundHandler != null");
+        Asserts.assertNull(backgroundThread, "backgroundThread == null");
+        Asserts.assertNull(backgroundHandler, "backgroundHandler == null");
         backgroundThread = new HandlerThread("Camera2Background");
         backgroundThread.start();
         backgroundHandler = new Handler(backgroundThread.getLooper());
@@ -209,7 +208,7 @@ public class Camera2Device implements AutoCloseable
     private void stopBackgroundThread()
     {
         Log.d(TAG, "stopBackgroundThread() called");
-        if (backgroundThread == null) throw new RuntimeException("Assertation failed: backgroundThread == null");
+        Asserts.assertNotNull(backgroundThread, "backgroundThread != null");
         backgroundThread.quitSafely();
         try {
             backgroundThread.join();
@@ -226,7 +225,7 @@ public class Camera2Device implements AutoCloseable
         try {
             final String[] cameraIdList = manager.getCameraIdList();
             for (String cameraId : cameraIdList) {
-                if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
+                Asserts.assertNotNull(cameraId, "cameraId != null");
                 CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
                 //Range<Long> longRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
@@ -238,14 +237,14 @@ public class Camera2Device implements AutoCloseable
                     continue;
                 }
                 Integer boxedOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-                if (boxedOrientation == null) throw new RuntimeException("Assertation failed: boxedOrientation == null");
+                Asserts.assertNotNull(boxedOrientation, "boxedOrientation != null");
                 sensorOrientation = boxedOrientation;
                 Size largest = Collections.max(
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new Camera2Device.CompareSizesByArea()
                 );
                 imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, BRACKETS);
-                if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
+                Asserts.assertNotNull(imageReader, "imageReader != null");
                 imageReader.setOnImageAvailableListener(
                         new ImageReader.OnImageAvailableListener()
                         {
@@ -263,7 +262,7 @@ public class Camera2Device implements AutoCloseable
         } catch (CameraAccessException e) {
             throw new RuntimeException(e);
         }
-        if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
+        Asserts.assertNotNull(cameraId, "cameraId != null");
     }
 
     private final CameraDevice.StateCallback deviceStateCallback = new CameraDevice.StateCallback()
@@ -338,8 +337,8 @@ public class Camera2Device implements AutoCloseable
     private void createCaptureSession()
     {
         Log.d(TAG, "createCaptureSession() called");
-        if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
-        if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
+        Asserts.assertNotNull(cameraDevice, "cameraDevice != null");
+        Asserts.assertNotNull(imageReader, "imageReader != null");
         try {
             cameraDevice.createCaptureSession(
                 Collections.singletonList(imageReader.getSurface()),
@@ -348,7 +347,7 @@ public class Camera2Device implements AutoCloseable
                     @Override
                     public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession)
                     {
-                        if (captureSession != null) throw new RuntimeException("Assertation failed: captureSession != null");
+                        Asserts.assertNull(captureSession, "captureSession == null");
                         captureSession = cameraCaptureSession;
                         updateCaptureRequestsAccordingToAe();
                         controller.switchState(States.READY);
@@ -369,8 +368,9 @@ public class Camera2Device implements AutoCloseable
 
     private CaptureRequest.Builder createCaptureRequestBuilder()
     {
-        if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
-        if (imageReader == null) throw new RuntimeException("Assertation failed: imageReader == null");
+        Log.d(TAG, "createCaptureRequestBuilder() called");
+        Asserts.assertNotNull(cameraDevice, "cameraDevice != null");
+        Asserts.assertNotNull(imageReader, "imageReader != null");
         WindowManager windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         final int rotation = windowManager.getDefaultDisplay().getRotation();
         CaptureRequest.Builder captureBuilder;
@@ -402,8 +402,8 @@ public class Camera2Device implements AutoCloseable
     private void captureBurst()
     {
         Log.d(TAG, "captureBurst() called");
-        if (captureSession == null) throw new RuntimeException("Assertation failed: captureSession == null");
-        if (!captureRequests.isEmpty()) throw new RuntimeException("Assertation failed: !captureRequests.isEmpty()");
+        Asserts.assertNotNull(captureSession, "captureSession != null");
+        Asserts.assertTrue(!captureRequests.isEmpty(), "!captureRequests.isEmpty()");
         final AtomicInteger frame = new AtomicInteger(0);
         try {
             captureSession.captureBurst(
