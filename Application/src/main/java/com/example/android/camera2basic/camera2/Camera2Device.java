@@ -12,7 +12,6 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -39,7 +38,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by grigory on 16.05.17.
@@ -224,7 +222,7 @@ public class Camera2Device implements AutoCloseable
     public void performBracketing(@NonNull ArrayList<Bracket> brackets)
     {
         Log.d(TAG, "performBracketing() called");
-        Asserts.assertTrue(brackets.size() < MAX_BRACKETS, "brackets.size() < MAX_BRACKETS");
+        Asserts.assertTrue(brackets.size() <= MAX_BRACKETS, "brackets.size() < MAX_BRACKETS");
         Asserts.assertTrue(controller.isInState(States.READY), "controller.isInState(States.READY)");
         Asserts.assertNotNull(imageReader, "imageReader != null");
         bracketingStarted = System.currentTimeMillis();
