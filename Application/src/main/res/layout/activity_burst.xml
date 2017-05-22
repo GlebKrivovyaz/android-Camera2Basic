@@ -11,8 +11,8 @@
 
     <Button
         android:id="@+id/btn_burst"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="400dp"
+        android:layout_height="400dp"
         android:text="Burst"
         android:layout_centerInParent="true"/>
 

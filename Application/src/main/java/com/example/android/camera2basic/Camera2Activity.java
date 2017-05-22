@@ -156,7 +156,7 @@ public class Camera2Activity extends Activity
         public ImageSaver(Image image) {
             RESOURCES.mkdirs();
             mImage = image;
-            mFile = new File(RESOURCES, String.valueOf(System.currentTimeMillis()) + ".jpg");
+            mFile = new File(RESOURCES, String.valueOf(System.currentTimeMillis()));
         }
 
         @Override

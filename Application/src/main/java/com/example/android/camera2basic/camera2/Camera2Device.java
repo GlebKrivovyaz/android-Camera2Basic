@@ -299,7 +299,7 @@ public class Camera2Device implements AutoCloseable
                             @Override
                             public void onImageAvailable(ImageReader reader)
                             {
-                                listener.onImageAvailable(reader.acquireLatestImage());
+                                listener.onImageAvailable(reader.acquireNextImage());
                             }
                         },
                         backgroundHandler
@@ -436,6 +436,7 @@ public class Camera2Device implements AutoCloseable
         Log.d(TAG, "updateCaptureRequests() called with: brackets = [" + brackets + "]");
         Asserts.assertNotNull(exposureRange, "exposureRange != null");
         Asserts.assertNotNull(sensitivityRange, "sensitivityRange != null");
+        captureRequests.clear();
         CaptureRequest.Builder captureRequestBuilder = createCaptureRequestBuilder();
         for (Bracket bracket : brackets) {
             Asserts.assertTrue(bracket.getExposure() <= exposureRange.getUpper() && bracket.getExposure() >= exposureRange.getLower(), "bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower()");
