@@ -4,13 +4,10 @@
               android:layout_width="match_parent"
               android:layout_height="match_parent">
 
-    <Button
-        android:id="@+id/btn_precapture"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Precapture AE"
-        android:layout_toLeftOf="@+id/btn_burst"
-        android:layout_centerVertical="true"/>
+    <TextView
+        android:id="@+id/txt_cam_characteristics"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
 
     <Button
         android:id="@+id/btn_burst"

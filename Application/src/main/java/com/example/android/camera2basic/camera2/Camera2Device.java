@@ -22,6 +22,7 @@ import android.support.annotation.Nullable;
 import android.support.v13.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.util.Range;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
@@ -47,6 +48,8 @@ public class Camera2Device implements AutoCloseable
 {
     private static final String TAG = Camera2Device.class.getSimpleName();
 
+    private static final int MAX_BRACKETS = 10;
+
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -55,17 +58,39 @@ public class Camera2Device implements AutoCloseable
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
 
-    private static final int BRACKETS = 5;
-
-    public static class CameraException extends Exception {
+    public static class CameraException extends Exception
+    {
         CameraException(String what)
         {
             super(what);
         }
     }
 
+    public static class Bracket
+    {
+        private final long exposure;
+        private final int iso;
+
+        public Bracket(long exposure, int iso)
+        {
+            this.exposure = exposure;
+            this.iso = iso;
+        }
+
+        public long getExposure()
+        {
+            return exposure;
+        }
+
+        public int getIso()
+        {
+            return iso;
+        }
+    }
+
     public interface Listener
     {
+        void onCameraCharacteristics(@NonNull Range<Long> exposureRange, @NonNull Range<Integer> sensitivityRange);
         void onReady();
         void onImageAvailable(@NonNull Image image);
     }
@@ -139,7 +164,17 @@ public class Camera2Device implements AutoCloseable
             protected void onEnter(@NonNull StateMachine parent)
             {
                 Log.i(TAG, "onEnter: TAKING_PICTURE");
-                captureBurst();
+            }
+
+            private final ArrayList<Bracket> clazz = new ArrayList<>();
+
+            @Override
+            protected void onEvent(@NonNull StateMachine parent, @NonNull Object event)
+            {
+               if (event.getClass().equals(clazz.getClass())) {
+                   ArrayList<Bracket> casted = (ArrayList<Bracket>) event;
+                   captureBurst(casted);
+               }
             }
         });
         controller.addState(States.SHUTDOWN, new StateMachine.State()
@@ -185,12 +220,14 @@ public class Camera2Device implements AutoCloseable
         }
     }
 
-    public void performBracketing()
+    public void performBracketing(@NonNull ArrayList<Bracket> brackets)
     {
         Log.d(TAG, "performBracketing() called");
+        Asserts.assertTrue(brackets.size() < MAX_BRACKETS, "brackets.size() < MAX_BRACKETS");
         Asserts.assertTrue(controller.isInState(States.READY), "controller.isInState(States.READY)");
         Asserts.assertNotNull(imageReader, "imageReader != null");
         controller.switchState(States.TAKING_PICTURE);
+        controller.sendEvent(brackets);
     }
 
     // ------------------------- +Business -------------------------
@@ -218,6 +255,12 @@ public class Camera2Device implements AutoCloseable
         }
     }
 
+    @Nullable
+    private Range<Long> exposureRange;
+
+    @Nullable
+    private Range<Integer> sensitivityRange;
+
     private void selectCamera(@NonNull final Listener listener)
     {
         Log.d(TAG, "selectCamera() called");
@@ -227,7 +270,11 @@ public class Camera2Device implements AutoCloseable
             for (String cameraId : cameraIdList) {
                 Asserts.assertNotNull(cameraId, "cameraId != null");
                 CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-                //Range<Long> longRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+                exposureRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+                Asserts.assertNotNull(exposureRange, "exposureRange != null");
+                sensitivityRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+                Asserts.assertNotNull(sensitivityRange, "sensitivityRange != null");
+                listener.onCameraCharacteristics(exposureRange, sensitivityRange);
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
                 if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
                     continue;
@@ -243,7 +290,7 @@ public class Camera2Device implements AutoCloseable
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new Camera2Device.CompareSizesByArea()
                 );
-                imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, BRACKETS);
+                imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, MAX_BRACKETS);
                 Asserts.assertNotNull(imageReader, "imageReader != null");
                 imageReader.setOnImageAvailableListener(
                         new ImageReader.OnImageAvailableListener()
@@ -296,7 +343,7 @@ public class Camera2Device implements AutoCloseable
     private void openCamera()
     {
         Log.d(TAG, "openCamera() called");
-        assert cameraId != null : "Assertion failed: cameraId != null";
+        Asserts.assertNotNull(cameraId, "cameraId != null");
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             throw new RuntimeException("No camera2 permissions!");
         }
@@ -349,7 +396,6 @@ public class Camera2Device implements AutoCloseable
                     {
                         Asserts.assertNull(captureSession, "captureSession == null");
                         captureSession = cameraCaptureSession;
-                        updateCaptureRequestsAccordingToAe();
                         controller.switchState(States.READY);
                     }
 
@@ -384,26 +430,30 @@ public class Camera2Device implements AutoCloseable
         return captureBuilder;
     }
 
-    private void updateCaptureRequestsAccordingToAe()
+    private void updateCaptureRequests(@NonNull ArrayList<Bracket> brackets)
     {
+        Log.d(TAG, "updateCaptureRequests() called with: brackets = [" + brackets + "]");
+        Asserts.assertNotNull(exposureRange, "exposureRange != null");
+        Asserts.assertNotNull(sensitivityRange, "sensitivityRange != null");
         captureRequests.clear();
         CaptureRequest.Builder captureRequestBuilder = createCaptureRequestBuilder();
-        for (int bracket = 0; bracket < BRACKETS; bracket++) {
-            //captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 685000000L * bracket);
-            //captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-            //captureBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, bracket);
-            //CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION
-            // todo: exposition and other changes
+        for (Bracket bracket : brackets) {
+            Asserts.assertTrue(bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower(), "bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower()");
+            Asserts.assertTrue(bracket.getIso() < sensitivityRange.getUpper() && bracket.getIso() > sensitivityRange.getLower(), "bracket.getIso() < sensitivityRange.getUpper() && bracket.getIso() > sensitivityRange.getLower()");
+            captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, bracket.getExposure()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_EXPOSURE_TIME
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, bracket.getIso()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_SENSITIVITY
             captureRequests.add(captureRequestBuilder.build());
         }
     }
 
-    private void captureBurst()
+    private void captureBurst(@NonNull final ArrayList<Bracket> brackets)
     {
         Log.d(TAG, "captureBurst() called");
         Asserts.assertNotNull(captureSession, "captureSession != null");
         Asserts.assertTrue(!captureRequests.isEmpty(), "!captureRequests.isEmpty()");
+        updateCaptureRequests(brackets);
         final AtomicInteger frame = new AtomicInteger(0);
         try {
             captureSession.captureBurst(
@@ -411,9 +461,11 @@ public class Camera2Device implements AutoCloseable
                     new CameraCaptureSession.CaptureCallback()
                     {
                         @Override
-                        public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result)
+                        public void onCaptureCompleted(@NonNull CameraCaptureSession session,
+                                                       @NonNull CaptureRequest request,
+                                                       @NonNull TotalCaptureResult result)
                         {
-                            if (frame.incrementAndGet() == BRACKETS) {
+                            if (frame.incrementAndGet() == brackets.size()) {
                                 controller.switchState(States.READY);
                             }
                         }

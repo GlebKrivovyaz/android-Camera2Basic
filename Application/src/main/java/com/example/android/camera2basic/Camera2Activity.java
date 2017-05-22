@@ -7,8 +7,10 @@ import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
+import android.util.Range;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.android.camera2basic.camera2.Camera2Device;
@@ -17,6 +19,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Locale;
 
 /**
  * Created by grigory on 17.05.17.
@@ -33,7 +37,18 @@ public class Camera2Activity extends Activity
     private Button buttonBurst;
 
     @Nullable
-    private Button buttonPrecaptureAe;
+    private TextView cameraCharacteristics;
+
+    private static final ArrayList<Camera2Device.Bracket> BRACKETS = new ArrayList<>();
+    static
+    {
+        BRACKETS.add(new Camera2Device.Bracket(100000000, 200));
+        BRACKETS.add(new Camera2Device.Bracket(200000000, 400));
+        BRACKETS.add(new Camera2Device.Bracket(300000000, 700));
+        BRACKETS.add(new Camera2Device.Bracket(400000000, 1000));
+        BRACKETS.add(new Camera2Device.Bracket(500000000, 1200));
+        BRACKETS.add(new Camera2Device.Bracket(686000000, 1600));
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState)
@@ -42,8 +57,6 @@ public class Camera2Activity extends Activity
         setContentView(R.layout.activity_burst);
         buttonBurst = (Button) findViewById(R.id.btn_burst);
         Asserts.assertNotNull(buttonBurst, "buttonBurst != null");
-        buttonPrecaptureAe = (Button) findViewById(R.id.btn_precapture);
-        Asserts.assertNotNull(buttonPrecaptureAe, "buttonPrecaptureAe != null");
         buttonBurst.setOnClickListener(new View.OnClickListener()
         {
             @Override
@@ -52,20 +65,11 @@ public class Camera2Activity extends Activity
                 Asserts.assertNotNull(device, "device != null");
                 showButtons(false);
                 started = System.currentTimeMillis();
-                device.performBracketing();
+                device.performBracketing(new ArrayList<Camera2Device.Bracket>());
                 Log.i(TAG, "onReady: starting");
             }
         });
-        buttonPrecaptureAe.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View v)
-            {
-                Asserts.assertNotNull(device, "device != null");
-                showButtons(false);
-                device.findExposureLock();
-            }
-        });
+        cameraCharacteristics = (TextView) findViewById(R.id.txt_cam_characteristics);
         Camera2Device.requestCameraPermissions(this);
     }
 
@@ -74,6 +78,17 @@ public class Camera2Activity extends Activity
 
     private final Camera2Device.Listener listener = new Camera2Device.Listener()
     {
+        @Override
+        public void onCameraCharacteristics(@NonNull Range<Long> exposureRange, @NonNull Range<Integer> sensitivityRange)
+        {
+            Asserts.assertNotNull(cameraCharacteristics, "cameraCharacteristics != null");
+            cameraCharacteristics.setText(String.format(
+                    Locale.US, "Exposure range: %d - %d, iso range: %d - %d",
+                    exposureRange.getLower(), exposureRange.getUpper(),
+                    sensitivityRange.getLower(), sensitivityRange.getUpper()
+            ));
+        }
+
         @Override
         public void onReady()
         {
@@ -119,9 +134,7 @@ public class Camera2Activity extends Activity
     private void showButtons(boolean visible)
     {
         Asserts.assertNotNull(buttonBurst, "buttonBurst != null");
-        Asserts.assertNotNull(buttonPrecaptureAe, "buttonPrecaptureAe != null");
         buttonBurst.setVisibility(visible ? View.VISIBLE : View.GONE);
-        buttonPrecaptureAe.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     // ----------------------- Auxilary -------------------------------
