@@ -77,12 +77,12 @@ public class Camera2Device implements AutoCloseable
             this.iso = iso;
         }
 
-        public long getExposure()
+        long getExposure()
         {
             return exposure;
         }
 
-        public int getIso()
+        int getIso()
         {
             return iso;
         }

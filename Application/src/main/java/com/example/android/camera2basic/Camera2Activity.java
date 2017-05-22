@@ -83,7 +83,7 @@ public class Camera2Activity extends Activity
         {
             Asserts.assertNotNull(cameraCharacteristics, "cameraCharacteristics != null");
             cameraCharacteristics.setText(String.format(
-                    Locale.US, "Exposure range: %d - %d, iso range: %d - %d",
+                    Locale.US, "Exposure range: {%d - %d}, ISO range: {%d - %d}",
                     exposureRange.getLower(), exposureRange.getUpper(),
                     sensitivityRange.getLower(), sensitivityRange.getUpper()
             ));
