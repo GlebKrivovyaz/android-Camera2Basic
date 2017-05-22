@@ -47,7 +47,7 @@ public class Camera2Device implements AutoCloseable
 {
     private static final String TAG = Camera2Device.class.getSimpleName();
 
-    private static final int REQUEST_CAMERA_PERMISSION = "GeoCV.camera".hashCode();
+    private static final int REQUEST_CAMERA_PERMISSION = 123;
 
     private static final int MAX_BRACKETS = 10;
 
