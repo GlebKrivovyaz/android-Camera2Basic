@@ -123,7 +123,7 @@ public class Camera2Activity extends Activity
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         try {
             if (Camera2Device.onPermissionsResult(requestCode, permissions, grantResults)) {
-                device = new Camera2Device(this);
+                device = new Camera2Device(this, 0.0f);
                 device.prepare(listener);
             }
         } catch (Camera2Device.CameraException e) {

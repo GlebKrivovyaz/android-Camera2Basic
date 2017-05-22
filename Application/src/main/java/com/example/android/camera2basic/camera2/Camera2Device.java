@@ -47,6 +47,8 @@ public class Camera2Device implements AutoCloseable
 {
     private static final String TAG = Camera2Device.class.getSimpleName();
 
+    private static final int REQUEST_CAMERA_PERMISSION = "GeoCV.camera".hashCode();
+
     private static final int MAX_BRACKETS = 10;
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
@@ -94,10 +96,6 @@ public class Camera2Device implements AutoCloseable
         void onImageAvailable(@NonNull Image image);
     }
 
-    private final StateMachine controller = new StateMachine();
-
-    private enum States { PREPARE, READY, TAKING_PICTURE, SHUTDOWN }
-
     private final Context context;
 
     @Nullable
@@ -130,12 +128,17 @@ public class Camera2Device implements AutoCloseable
 
     private int sensorOrientation;
 
+    private final float focusDistance;
+
     // ------------------------- +Controller -------------------------
 
-    private static final int REQUEST_CAMERA_PERMISSION = "GeoCV.camera".hashCode();
+    private final StateMachine controller = new StateMachine();
 
-    public Camera2Device(@NonNull final Context context)
+    private enum States { PREPARE, READY, TAKING_PICTURE, SHUTDOWN }
+
+    public Camera2Device(@NonNull final Context context, float focusDistance)
     {
+        this.focusDistance = focusDistance;
         Log.d(TAG, "Camera2Device() called with: context = [" + context + "]");
         this.context = context;
         startBackgroundThread();
@@ -438,9 +441,10 @@ public class Camera2Device implements AutoCloseable
             Asserts.assertTrue(bracket.getExposure() <= exposureRange.getUpper() && bracket.getExposure() >= exposureRange.getLower(), "bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower()");
             Asserts.assertTrue(bracket.getIso() <= sensitivityRange.getUpper() && bracket.getIso() >= sensitivityRange.getLower(), "bracket.getIso() < sensitivityRange.getUpper() && bracket.getIso() > sensitivityRange.getLower()");
             captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, bracket.getIso()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_SENSITIVITY
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
             captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, bracket.getExposure()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_EXPOSURE_TIME
-            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, bracket.getIso()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_SENSITIVITY
+            captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistance);
             captureRequests.add(captureRequestBuilder.build());
         }
     }
