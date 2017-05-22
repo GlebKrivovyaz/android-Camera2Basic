@@ -102,10 +102,16 @@ public class Camera2Device implements AutoCloseable
     private String cameraId;
 
     @Nullable
-    private HandlerThread backgroundThread;
+    private HandlerThread capturingThread;
 
     @Nullable
-    private Handler backgroundHandler;
+    private Handler capturingHandler;
+
+    @Nullable
+    private HandlerThread fileThread;
+
+    @Nullable
+    private Handler fileHandler;
 
     @Nullable
     private ImageReader imageReader;
@@ -141,7 +147,7 @@ public class Camera2Device implements AutoCloseable
         this.focusDistance = focusDistance;
         Log.d(TAG, "Camera2Device() called with: context = [" + context + "]");
         this.context = context;
-        startBackgroundThread();
+        startBackgroundThreads();
     }
 
     public void prepare(@NonNull final Listener listener)
@@ -241,24 +247,35 @@ public class Camera2Device implements AutoCloseable
 
     // ------------------------- +Business -------------------------
 
-    private void startBackgroundThread()
+    private void startBackgroundThreads()
     {
-        Log.d(TAG, "startBackgroundThread() called");
-        Asserts.assertNull(backgroundThread, "backgroundThread == null");
-        Asserts.assertNull(backgroundHandler, "backgroundHandler == null");
-        backgroundThread = new HandlerThread("Camera2Background");
-        backgroundThread.start();
-        backgroundHandler = new Handler(backgroundThread.getLooper());
+        Log.d(TAG, "startBackgroundThreads() called");
+        Asserts.assertNull(capturingThread, "capturingThread == null");
+        Asserts.assertNull(capturingHandler, "capturingHandler == null");
+        Asserts.assertNull(fileThread, "fileThread == null");
+        Asserts.assertNull(fileHandler, "fileHandler == null");
+        capturingThread = new HandlerThread("CameraCpturingThread", Thread.MAX_PRIORITY);
+        capturingThread.start();
+        capturingHandler = new Handler(capturingThread.getLooper());
+        fileThread = new HandlerThread("CameraFileThread", Thread.MAX_PRIORITY);
+        fileThread.start();
+        fileHandler = new Handler(fileThread.getLooper());
     }
 
     private void stopBackgroundThread()
     {
         Log.d(TAG, "stopBackgroundThread() called");
-        Asserts.assertNotNull(backgroundThread, "backgroundThread != null");
-        backgroundThread.quitSafely();
+        Asserts.assertNotNull(capturingThread, "capturingThread != null");
+        Asserts.assertNotNull(capturingThread, "capturingThread != null");
+        Asserts.assertNotNull(fileThread, "fileThread != null");
+        Asserts.assertNotNull(fileHandler, "fileHandler != null");
+        capturingThread.quitSafely();
+        fileThread.quitSafely();
         try {
-            backgroundThread.join();
-            backgroundHandler = null;
+            capturingThread.join();
+            capturingHandler = null;
+            fileThread.join();
+            fileHandler = null;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -301,7 +318,7 @@ public class Camera2Device implements AutoCloseable
                                 listener.onImageAvailable(reader.acquireNextImage());
                             }
                         },
-                        backgroundHandler
+                        fileHandler
                 );
                 Camera2Device.this.cameraId = cameraId;
                 break;
@@ -352,7 +369,7 @@ public class Camera2Device implements AutoCloseable
             if (!cameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
-            manager.openCamera(cameraId, deviceStateCallback, backgroundHandler);
+            manager.openCamera(cameraId, deviceStateCallback, capturingHandler);
         } catch (InterruptedException | CameraAccessException e) {
             throw new RuntimeException(e);
         }
@@ -475,7 +492,7 @@ public class Camera2Device implements AutoCloseable
                             throw new RuntimeException("Bracketing failed!");
                         }
                     },
-                    backgroundHandler
+                    capturingHandler
             );
         } catch (CameraAccessException e) {
             throw new RuntimeException(e);
