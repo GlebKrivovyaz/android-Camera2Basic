@@ -51,6 +51,8 @@ public class Camera2Device implements AutoCloseable
 
     private static final int MAX_BRACKETS = 10;
 
+    private static final int IMAGE_FORMAT = ImageFormat.JPEG;
+
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -303,11 +305,11 @@ public class Camera2Device implements AutoCloseable
                 if (map == null) {
                     continue;
                 }
-                Integer boxedOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-                Asserts.assertNotNull(boxedOrientation, "boxedOrientation != null");
-                sensorOrientation = boxedOrientation;
-                Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)), new Camera2Device.CompareSizesByArea());
-                imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, MAX_BRACKETS);
+                if (map.getOutputSizes(IMAGE_FORMAT) == null) {
+                    throw new RuntimeException("Format not supported! " + IMAGE_FORMAT);
+                }
+                Size largest = Collections.max(Arrays.asList(map.getOutputSizes(IMAGE_FORMAT)), new Camera2Device.CompareSizesByArea());
+                imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), IMAGE_FORMAT, MAX_BRACKETS);
                 Asserts.assertNotNull(imageReader, "imageReader != null");
                 imageReader.setOnImageAvailableListener(
                         new ImageReader.OnImageAvailableListener()
@@ -320,6 +322,9 @@ public class Camera2Device implements AutoCloseable
                         },
                         fileHandler
                 );
+                Integer boxedOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+                Asserts.assertNotNull(boxedOrientation, "boxedOrientation != null");
+                sensorOrientation = boxedOrientation;
                 Camera2Device.this.cameraId = cameraId;
                 break;
             }
