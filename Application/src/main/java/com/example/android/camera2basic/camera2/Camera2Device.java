@@ -441,9 +441,9 @@ public class Camera2Device implements AutoCloseable
             Asserts.assertTrue(bracket.getExposure() <= exposureRange.getUpper() && bracket.getExposure() >= exposureRange.getLower(), "bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower()");
             Asserts.assertTrue(bracket.getIso() <= sensitivityRange.getUpper() && bracket.getIso() >= sensitivityRange.getLower(), "bracket.getIso() < sensitivityRange.getUpper() && bracket.getIso() > sensitivityRange.getLower()");
             captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, bracket.getIso()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_SENSITIVITY
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, bracket.getIso());
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, bracket.getExposure()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_EXPOSURE_TIME
+            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, bracket.getExposure());
             captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistance);
             captureRequests.add(captureRequestBuilder.build());
         }
