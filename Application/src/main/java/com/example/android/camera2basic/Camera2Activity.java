@@ -46,11 +46,11 @@ public class Camera2Activity extends Activity
     private static final ArrayList<Camera2Device.Bracket> BRACKETS = new ArrayList<>();
     static
     {
+        BRACKETS.add(new Camera2Device.Bracket(600 * MILLISEC, 400));
+        BRACKETS.add(new Camera2Device.Bracket(600 * MILLISEC, 200));
         BRACKETS.add(new Camera2Device.Bracket(600 * MILLISEC, 100));
-        BRACKETS.add(new Camera2Device.Bracket(500 * MILLISEC, 100));
-        BRACKETS.add(new Camera2Device.Bracket(400 * MILLISEC, 100));
-        BRACKETS.add(new Camera2Device.Bracket(300 * MILLISEC, 100));
-        BRACKETS.add(new Camera2Device.Bracket(200 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(100 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(20 * MILLISEC, 100));
     }
 
     @Override
