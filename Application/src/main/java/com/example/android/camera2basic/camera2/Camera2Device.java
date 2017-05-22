@@ -122,11 +122,17 @@ public class Camera2Device implements AutoCloseable
 
     private final List<CaptureRequest> captureRequests = new ArrayList<>();
 
+    @Nullable
+    private Range<Long> exposureRange;
+
+    @Nullable
+    private Range<Integer> sensitivityRange;
+
     private int sensorOrientation;
 
     // ------------------------- +Controller -------------------------
 
-    private static final int REQUEST_CAMERA_PERMISSION = 123;
+    private static final int REQUEST_CAMERA_PERMISSION = "GeoCV.camera".hashCode();
 
     public Camera2Device(@NonNull final Context context)
     {
@@ -255,12 +261,6 @@ public class Camera2Device implements AutoCloseable
         }
     }
 
-    @Nullable
-    private Range<Long> exposureRange;
-
-    @Nullable
-    private Range<Integer> sensitivityRange;
-
     private void selectCamera(@NonNull final Listener listener)
     {
         Log.d(TAG, "selectCamera() called");
@@ -286,10 +286,7 @@ public class Camera2Device implements AutoCloseable
                 Integer boxedOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
                 Asserts.assertNotNull(boxedOrientation, "boxedOrientation != null");
                 sensorOrientation = boxedOrientation;
-                Size largest = Collections.max(
-                        Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
-                        new Camera2Device.CompareSizesByArea()
-                );
+                Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)), new Camera2Device.CompareSizesByArea());
                 imageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, MAX_BRACKETS);
                 Asserts.assertNotNull(imageReader, "imageReader != null");
                 imageReader.setOnImageAvailableListener(
