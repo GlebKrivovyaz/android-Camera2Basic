@@ -220,12 +220,15 @@ public class Camera2Device implements AutoCloseable
         }
     }
 
+    private long bracketingStarted = System.currentTimeMillis();
+
     public void performBracketing(@NonNull ArrayList<Bracket> brackets)
     {
         Log.d(TAG, "performBracketing() called");
         Asserts.assertTrue(brackets.size() < MAX_BRACKETS, "brackets.size() < MAX_BRACKETS");
         Asserts.assertTrue(controller.isInState(States.READY), "controller.isInState(States.READY)");
         Asserts.assertNotNull(imageReader, "imageReader != null");
+        bracketingStarted = System.currentTimeMillis();
         controller.switchState(States.TAKING_PICTURE);
         controller.sendEvent(brackets);
     }
@@ -435,7 +438,6 @@ public class Camera2Device implements AutoCloseable
         Log.d(TAG, "updateCaptureRequests() called with: brackets = [" + brackets + "]");
         Asserts.assertNotNull(exposureRange, "exposureRange != null");
         Asserts.assertNotNull(sensitivityRange, "sensitivityRange != null");
-        captureRequests.clear();
         CaptureRequest.Builder captureRequestBuilder = createCaptureRequestBuilder();
         for (Bracket bracket : brackets) {
             Asserts.assertTrue(bracket.getExposure() <= exposureRange.getUpper() && bracket.getExposure() >= exposureRange.getLower(), "bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower()");
@@ -466,6 +468,7 @@ public class Camera2Device implements AutoCloseable
                                                        @NonNull TotalCaptureResult result)
                         {
                             if (frame.incrementAndGet() == brackets.size()) {
+                                Log.i(TAG, "onCaptureCompleted: bracketing took: " + (System.currentTimeMillis() - bracketingStarted) / 1000.0);
                                 controller.switchState(States.READY);
                             }
                         }

@@ -39,15 +39,16 @@ public class Camera2Activity extends Activity
     @Nullable
     private TextView cameraCharacteristics;
 
+    private static long MILLISEC = 1000000L;
+
     private static final ArrayList<Camera2Device.Bracket> BRACKETS = new ArrayList<>();
     static
     {
-        BRACKETS.add(new Camera2Device.Bracket(100000000, 200));
-        BRACKETS.add(new Camera2Device.Bracket(200000000, 400));
-        BRACKETS.add(new Camera2Device.Bracket(300000000, 700));
-        BRACKETS.add(new Camera2Device.Bracket(400000000, 1000));
-        BRACKETS.add(new Camera2Device.Bracket(500000000, 1200));
-        BRACKETS.add(new Camera2Device.Bracket(686000000, 1600));
+        BRACKETS.add(new Camera2Device.Bracket(30 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(100 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(650 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(650 * MILLISEC, 200));
+        BRACKETS.add(new Camera2Device.Bracket(650 * MILLISEC, 400));
     }
 
     @Override
@@ -107,9 +108,9 @@ public class Camera2Activity extends Activity
         {
             Log.i(TAG, "onImageAvailable: " + image);
             bracket++;
-            if (bracket == 5) {
+            if (bracket == BRACKETS.size()) {
                 bracket = 0;
-                Log.i(TAG, "onImageAvailable: took " + (System.currentTimeMillis() - started) / 1000.0);
+                Log.i(TAG, "onImageAvailable: images saving took " + (System.currentTimeMillis() - started) / 1000.0);
             }
             new ImageSaver(image).run();
             image.close();
