@@ -166,13 +166,11 @@ public class Camera2Device implements AutoCloseable
                 Log.i(TAG, "onEnter: TAKING_PICTURE");
             }
 
-            private final ArrayList<Bracket> clazz = new ArrayList<>();
-
             @Override
             protected void onEvent(@NonNull StateMachine parent, @NonNull Object event)
             {
-               if (event.getClass().equals(clazz.getClass())) {
-                   ArrayList<Bracket> casted = (ArrayList<Bracket>) event;
+                if (event.getClass().equals(ArrayList.class)) {
+                   @SuppressWarnings("unchecked") ArrayList<Bracket> casted = (ArrayList<Bracket>) event;
                    captureBurst(casted);
                }
             }

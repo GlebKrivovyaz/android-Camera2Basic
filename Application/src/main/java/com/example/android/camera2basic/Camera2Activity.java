@@ -39,7 +39,7 @@ public class Camera2Activity extends Activity
     @Nullable
     private TextView cameraCharacteristics;
 
-    private static long MILLISEC = 1000000L;
+    private static final long MILLISEC = 1000000L;
 
     private static final ArrayList<Camera2Device.Bracket> BRACKETS = new ArrayList<>();
     static
