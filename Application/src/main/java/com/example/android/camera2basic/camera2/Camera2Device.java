@@ -438,8 +438,8 @@ public class Camera2Device implements AutoCloseable
         captureRequests.clear();
         CaptureRequest.Builder captureRequestBuilder = createCaptureRequestBuilder();
         for (Bracket bracket : brackets) {
-            Asserts.assertTrue(bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower(), "bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower()");
-            Asserts.assertTrue(bracket.getIso() < sensitivityRange.getUpper() && bracket.getIso() > sensitivityRange.getLower(), "bracket.getIso() < sensitivityRange.getUpper() && bracket.getIso() > sensitivityRange.getLower()");
+            Asserts.assertTrue(bracket.getExposure() <= exposureRange.getUpper() && bracket.getExposure() >= exposureRange.getLower(), "bracket.getExposure() < exposureRange.getUpper() && bracket.getExposure() > exposureRange.getLower()");
+            Asserts.assertTrue(bracket.getIso() <= sensitivityRange.getUpper() && bracket.getIso() >= sensitivityRange.getLower(), "bracket.getIso() < sensitivityRange.getUpper() && bracket.getIso() > sensitivityRange.getLower()");
             captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF);
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
             captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, bracket.getExposure()); // https://developer.android.com/reference/android/hardware/camera2/CaptureRequest.html#SENSOR_EXPOSURE_TIME
@@ -451,9 +451,9 @@ public class Camera2Device implements AutoCloseable
     private void captureBurst(@NonNull final ArrayList<Bracket> brackets)
     {
         Log.d(TAG, "captureBurst() called");
+        updateCaptureRequests(brackets);
         Asserts.assertNotNull(captureSession, "captureSession != null");
         Asserts.assertTrue(!captureRequests.isEmpty(), "!captureRequests.isEmpty()");
-        updateCaptureRequests(brackets);
         final AtomicInteger frame = new AtomicInteger(0);
         try {
             captureSession.captureBurst(

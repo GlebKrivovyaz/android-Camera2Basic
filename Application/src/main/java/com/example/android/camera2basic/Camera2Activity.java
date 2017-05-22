@@ -65,7 +65,7 @@ public class Camera2Activity extends Activity
                 Asserts.assertNotNull(device, "device != null");
                 showButtons(false);
                 started = System.currentTimeMillis();
-                device.performBracketing(new ArrayList<Camera2Device.Bracket>());
+                device.performBracketing(BRACKETS);
                 Log.i(TAG, "onReady: starting");
             }
         });
