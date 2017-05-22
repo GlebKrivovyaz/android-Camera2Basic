@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.media.Image;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
@@ -12,7 +11,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.example.android.camera2basic.R;
 import com.example.android.camera2basic.camera2.Camera2Device;
 
 import java.io.File;
@@ -43,15 +41,15 @@ public class Camera2Activity extends Activity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_burst);
         buttonBurst = (Button) findViewById(R.id.btn_burst);
-        if (buttonBurst == null) throw new RuntimeException("Assertation failed: buttonBurst == null");
+        Asserts.assertNotNull(buttonBurst, "buttonBurst != null");
         buttonPrecaptureAe = (Button) findViewById(R.id.btn_precapture);
-        if (buttonPrecaptureAe == null) throw new RuntimeException("Assertation failed: buttonPrecaptureAe == null");
+        Asserts.assertNotNull(buttonPrecaptureAe, "buttonPrecaptureAe != null");
         buttonBurst.setOnClickListener(new View.OnClickListener()
         {
             @Override
             public void onClick(View v)
             {
-                if (device == null) throw new RuntimeException("Assertation failed: device == null");
+                Asserts.assertNotNull(device, "device != null");
                 showButtons(false);
                 started = System.currentTimeMillis();
                 device.performBracketing();
@@ -63,7 +61,7 @@ public class Camera2Activity extends Activity
             @Override
             public void onClick(View v)
             {
-                if (device == null) throw new RuntimeException("Assertation failed: device == null");
+                Asserts.assertNotNull(device, "device != null");
                 showButtons(false);
                 device.findExposureLock();
             }
@@ -79,7 +77,6 @@ public class Camera2Activity extends Activity
         @Override
         public void onReady()
         {
-            if (buttonBurst == null) throw new RuntimeException("Assertation failed: buttonBurst == null");
             runOnUiThread(new Runnable()
             {
                 @Override
@@ -88,12 +85,6 @@ public class Camera2Activity extends Activity
                     showButtons(true);
                 }
             });
-        }
-
-        @Override
-        public void onExposureLock(float ev)
-        {
-            int i = 0;
         }
 
         @Override
@@ -127,8 +118,8 @@ public class Camera2Activity extends Activity
 
     private void showButtons(boolean visible)
     {
-        if (buttonBurst == null) throw new RuntimeException("Assertation failed: buttonBurst == null");
-        if (buttonPrecaptureAe == null) throw new RuntimeException("Assertation failed: buttonPrecaptureAe == null");
+        Asserts.assertNotNull(buttonBurst, "buttonBurst != null");
+        Asserts.assertNotNull(buttonPrecaptureAe, "buttonPrecaptureAe != null");
         buttonBurst.setVisibility(visible ? View.VISIBLE : View.GONE);
         buttonPrecaptureAe.setVisibility(visible ? View.VISIBLE : View.GONE);
     }

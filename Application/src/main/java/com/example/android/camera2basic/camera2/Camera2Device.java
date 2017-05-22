@@ -40,8 +40,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// todo: setRepeatingBurst
-
 /**
  * Created by grigory on 16.05.17.
  */
@@ -70,13 +68,12 @@ public class Camera2Device implements AutoCloseable
     public interface Listener
     {
         void onReady();
-        void onExposureLock(float ev);
         void onImageAvailable(@NonNull Image image);
     }
 
     private final StateMachine controller = new StateMachine();
 
-    private enum States { PREPARE, READY, FIND_AE_LOCK, TAKING_PICTURE, SHUTDOWN }
+    private enum States { PREPARE, READY, TAKING_PICTURE, SHUTDOWN }
 
     private final Context context;
 
@@ -137,28 +134,6 @@ public class Camera2Device implements AutoCloseable
                 listener.onReady();
             }
         });
-        controller.addState(States.FIND_AE_LOCK, new StateMachine.State()
-        {
-            @Override
-            protected void onEnter(@NonNull StateMachine parent)
-            {
-                Log.i(TAG, "onEnter: FIND_AE_LOCK");
-                runAePrecaptureSequence();
-            }
-
-            @Override
-            protected void onEvent(@NonNull StateMachine parent, @NonNull Object event)
-            {
-                if (event instanceof CaptureResult) {
-                    CaptureResult casted = (CaptureResult) event;
-                    Integer aeState = casted.get(CaptureResult.CONTROL_AE_STATE);
-                    if (aeState == null || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
-                        listener.onExposureLock(0.0f); // todo
-                        controller.switchState(States.READY);
-                    }
-                }
-            }
-        });
         controller.addState(States.TAKING_PICTURE, new StateMachine.State()
         {
             @Override
@@ -209,13 +184,6 @@ public class Camera2Device implements AutoCloseable
         } else {
             return false;
         }
-    }
-
-    public void findExposureLock()
-    {
-        Log.d(TAG, "findExposureLock() called");
-        if (!controller.isInState(States.READY)) throw new RuntimeException("Assertation failed: !controller.isInState(States.READY)");
-        controller.switchState(States.FIND_AE_LOCK);
     }
 
     public void performBracketing()
@@ -329,7 +297,7 @@ public class Camera2Device implements AutoCloseable
     private void openCamera()
     {
         Log.d(TAG, "openCamera() called");
-        if (cameraId == null) throw new RuntimeException("Assertation failed: cameraId == null");
+        assert cameraId != null : "Assertion failed: cameraId != null";
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             throw new RuntimeException("No camera2 permissions!");
         }
@@ -399,33 +367,6 @@ public class Camera2Device implements AutoCloseable
         }
     }
 
-    private final CameraCaptureSession.CaptureCallback aePrecaptureCallback = new CameraCaptureSession.CaptureCallback()
-    {
-        @Override
-        public void onCaptureProgressed(@NonNull CameraCaptureSession session,
-                                        @NonNull CaptureRequest request,
-                                        @NonNull CaptureResult partialResult)
-        {
-            controller.sendEvent(partialResult);
-        }
-
-        @Override
-        public void onCaptureCompleted(@NonNull CameraCaptureSession session,
-                                       @NonNull CaptureRequest request,
-                                       @NonNull TotalCaptureResult result)
-        {
-            controller.sendEvent(result);
-        }
-
-        @Override
-        public void onCaptureFailed(@NonNull CameraCaptureSession session,
-                                    @NonNull CaptureRequest request,
-                                    @NonNull CaptureFailure failure)
-        {
-            throw new RuntimeException("runAePrecaptureSequence failed!");
-        }
-    };
-
     private CaptureRequest.Builder createCaptureRequestBuilder()
     {
         if (cameraDevice == null) throw new RuntimeException("Assertation failed: cameraDevice == null");
@@ -441,19 +382,6 @@ public class Camera2Device implements AutoCloseable
         captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
         captureBuilder.addTarget(imageReader.getSurface());
         return captureBuilder;
-    }
-
-    private void runAePrecaptureSequence()
-    {
-        Log.d(TAG, "runAePrecaptureSequence() called");
-        if (captureSession == null) throw new RuntimeException("Assertation failed: captureSession == null");
-        CaptureRequest.Builder captureRequestBuilder = createCaptureRequestBuilder();
-        try {
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-            captureSession.capture(captureRequestBuilder.build(), aePrecaptureCallback, backgroundHandler);
-        } catch (CameraAccessException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private void updateCaptureRequestsAccordingToAe()
