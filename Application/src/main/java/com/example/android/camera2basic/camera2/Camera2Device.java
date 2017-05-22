@@ -10,6 +10,7 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
@@ -455,21 +456,24 @@ public class Camera2Device implements AutoCloseable
         updateCaptureRequests(brackets);
         Asserts.assertNotNull(captureSession, "captureSession != null");
         Asserts.assertTrue(!captureRequests.isEmpty(), "!captureRequests.isEmpty()");
-        final AtomicInteger frame = new AtomicInteger(0);
         try {
             captureSession.captureBurst(
                     captureRequests,
                     new CameraCaptureSession.CaptureCallback()
                     {
                         @Override
-                        public void onCaptureCompleted(@NonNull CameraCaptureSession session,
-                                                       @NonNull CaptureRequest request,
-                                                       @NonNull TotalCaptureResult result)
+                        public void onCaptureSequenceCompleted(@NonNull CameraCaptureSession session, int sequenceId, long frameNumber)
                         {
-                            if (frame.incrementAndGet() == brackets.size()) {
-                                Log.i(TAG, "onCaptureCompleted: bracketing took: " + (System.currentTimeMillis() - bracketingStarted) / 1000.0);
-                                controller.switchState(States.READY);
-                            }
+                            super.onCaptureSequenceCompleted(session, sequenceId, frameNumber);
+                            Log.i(TAG, "onCaptureCompleted: bracketing took: " + (System.currentTimeMillis() - bracketingStarted) / 1000.0);
+                            controller.switchState(States.READY);
+                        }
+
+                        @Override
+                        public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull CaptureFailure failure)
+                        {
+                            super.onCaptureFailed(session, request, failure);
+                            throw new RuntimeException("Bracketing failed!");
                         }
                     },
                     backgroundHandler
