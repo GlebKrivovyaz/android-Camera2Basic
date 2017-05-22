@@ -242,7 +242,6 @@ public class Camera2Device implements AutoCloseable
         Asserts.assertTrue(brackets.size() <= MAX_BRACKETS, "brackets.size() < MAX_BRACKETS");
         Asserts.assertTrue(controller.isInState(States.READY), "controller.isInState(States.READY)");
         Asserts.assertNotNull(imageReader, "imageReader != null");
-        bracketingStarted = System.currentTimeMillis();
         controller.switchState(States.TAKING_PICTURE);
         controller.sendEvent(brackets);
     }
@@ -478,6 +477,7 @@ public class Camera2Device implements AutoCloseable
         Asserts.assertNotNull(captureSession, "captureSession != null");
         Asserts.assertTrue(!captureRequests.isEmpty(), "!captureRequests.isEmpty()");
         try {
+            bracketingStarted = System.currentTimeMillis();
             captureSession.captureBurst(
                     captureRequests,
                     new CameraCaptureSession.CaptureCallback()

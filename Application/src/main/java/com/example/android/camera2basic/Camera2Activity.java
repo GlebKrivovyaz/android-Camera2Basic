@@ -20,6 +20,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Locale;
 
 /**
@@ -44,11 +46,11 @@ public class Camera2Activity extends Activity
     private static final ArrayList<Camera2Device.Bracket> BRACKETS = new ArrayList<>();
     static
     {
-        BRACKETS.add(new Camera2Device.Bracket(30 * MILLISEC, 100));
-        BRACKETS.add(new Camera2Device.Bracket(100 * MILLISEC, 100));
-        BRACKETS.add(new Camera2Device.Bracket(650 * MILLISEC, 100));
-        BRACKETS.add(new Camera2Device.Bracket(650 * MILLISEC, 200));
-        BRACKETS.add(new Camera2Device.Bracket(650 * MILLISEC, 400));
+        BRACKETS.add(new Camera2Device.Bracket(600 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(500 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(400 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(300 * MILLISEC, 100));
+        BRACKETS.add(new Camera2Device.Bracket(200 * MILLISEC, 100));
     }
 
     @Override
@@ -93,14 +95,16 @@ public class Camera2Activity extends Activity
         @Override
         public void onReady()
         {
-            runOnUiThread(new Runnable()
+            /*runOnUiThread(new Runnable()
             {
                 @Override
                 public void run()
                 {
                     showButtons(true);
                 }
-            });
+            });*/
+            Asserts.assertNotNull(device, "device != null");
+            device.performBracketing(BRACKETS);
         }
 
         @Override
